@@ -1,0 +1,1 @@
+Le fichier `REPORT.md` décrivant le travail réalisé, les choix techniques, les fonctionnalités implémentées et les résultats des tests: a compléter au fur et à mesure.
