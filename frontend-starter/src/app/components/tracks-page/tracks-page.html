@@ -1,0 +1,65 @@
+<section>
+  <div class="hero">
+    <p class="eyebrow">MA BIBLIOTHÈQUE</p>
+    <h1>Backing tracks</h1>
+    <p>Importez et retrouvez vos fichiers.</p>
+  </div>
+
+  <div class="grid">
+    <article class="card">
+      <h2>Importer</h2>
+      <label>Titre<input [formControl]="title" [disabled]="uploadState() === 'uploading'" /></label>
+      <label>Fichier audio<input type="file" accept="audio/*" (change)="choose($event)" [disabled]="uploadState() === 'uploading'" /></label>
+      @if (uploadState() === 'uploading') {
+        <div class="upload-status" aria-live="polite">
+          <strong>Upload en cours</strong>
+          <div class="progress-bar">
+            <span [style.width.%]="uploadProgress()"></span>
+          </div>
+          <small>{{ uploadProgress() }}%</small>
+        </div>
+      } @else if (uploadState() === 'success') {
+        <p class="upload-state success">Téléversement réussi.</p>
+      } @else if (uploadState() === 'error') {
+        <p class="upload-state error">Échec du téléversement.</p>
+      }
+      <button type="button" (click)="upload()" [disabled]="!file || uploadState() === 'uploading'">Envoyer</button>
+    </article>
+
+    <article class="card">
+      <div class="row">
+        <h2>Mes pistes</h2>
+        <button type="button" (click)="load()">Actualiser</button>
+      </div>
+      @if (loading()) {
+        <p>Chargement…</p>
+      }
+      @for (track of tracks(); track track.id) {
+        <div class="track">
+          <div>
+            <b>{{ track.title }}</b>
+            <small>{{ track.originalName }} · {{ track.size }} Ko</small>
+          </div>
+          <div class="track-actions">
+            <button type="button" class="danger" (click)="delete(track)" [disabled]="deletingTracks()[track.id]" [attr.aria-label]="'Supprimer ' + track.title">
+              {{ deletingTracks()[track.id] ? '...' : 'Supprimer' }}
+            </button>
+          </div>
+        </div>
+      } @empty {
+        <p>Aucune piste.</p>
+      }
+      <div class="pager">
+        <button type="button" (click)="go(page() - 1)" [disabled]="page() === 1">Préc.</button>
+        <span>Page {{ page() }} / {{ pages() }}</span>
+        <button type="button" (click)="go(page() + 1)" [disabled]="page() === pages()">Suiv.</button>
+      </div>
+    </article>
+  </div>
+</section>
+
+@if (snackbarVisible()) {
+  <div class="snackbar" [class.error]="snackbarType() === 'error'" aria-live="polite">
+    {{ snackbarMessage() }}
+  </div>
+}
