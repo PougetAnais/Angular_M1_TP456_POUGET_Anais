@@ -1,0 +1,12 @@
+<section class="card recommendations-home">
+  <p class="eyebrow">ESPACE PERSONNEL</p>
+  <h1>Mes recommandations</h1>
+  @if (currentUser(); as user) {
+    <p>Bienvenue <strong>{{ '@' + user.username }}</strong>.</p>
+  }
+  <div class="empty-state" role="status">
+    <span aria-hidden="true">✦</span>
+    <h2>Votre collection commence ici</h2>
+    <p>Vos recommandations d’anime apparaîtront sur cette page.</p>
+  </div>
+</section>

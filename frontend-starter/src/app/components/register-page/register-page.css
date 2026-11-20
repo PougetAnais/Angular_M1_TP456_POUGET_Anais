@@ -1,1 +1,13 @@
 :host { display: block; max-width: 520px; margin: 0 auto; }
+.register-card { margin-block: 2rem; }
+.eyebrow { color: #7655c5; font-size: .8rem; font-weight: 700; letter-spacing: .12em; }
+.avatar-picker { display: grid; gap: .8rem; border: 1px solid #ddd9e8; border-radius: 12px; margin: 1.25rem 0; padding: 1rem; }
+.avatar-picker legend { font-weight: 700; padding-inline: .35rem; }
+.avatar-picker p { margin: 0; }
+.avatar-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; }
+.avatar-choice { display: grid; justify-items: center; gap: .35rem; border: 2px solid transparent; border-radius: 10px; padding: .5rem; cursor: pointer; }
+.avatar-choice.selected { border-color: #7655c5; background: #f4f0fc; }
+.avatar-choice input { accent-color: #7655c5; }
+.avatar-choice svg { width: 64px; height: 64px; }
+.avatar-choice span { font-size: .85rem; }
+@media (max-width: 420px) { .avatar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -2,7 +2,7 @@ import { inject, Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { tap } from 'rxjs';
 import { AuthResponse } from '../models/auth-response.model';
-import { User } from '../models/user.model';
+import { AvatarId, User } from '../models/user.model';
 
 /** Handles authentication and the current user's profile. */
 @Injectable({ providedIn: 'root' })
@@ -18,9 +18,16 @@ export class AuthService {
       .pipe(tap((response) => this.storeAuthentication(response)));
   }
 
-  register(name: string, email: string, password: string) {
+  register(
+    username: string,
+    email: string,
+    password: string,
+    passwordConfirmation: string,
+    visibility: 'public' | 'private',
+    avatarId: AvatarId,
+  ) {
     return this.http
-      .post<AuthResponse>('/api/auth/register', { name, email, password })
+      .post<AuthResponse>('/api/auth/register', { username, email, password, passwordConfirmation, visibility, avatarId })
       .pipe(tap((response) => this.storeAuthentication(response)));
   }
 
@@ -30,9 +37,9 @@ export class AuthService {
       .pipe(tap((user) => this.currentUser.set(user)));
   }
 
-  update(name: string) {
+  update(username: string, visibility: 'public' | 'private', avatarId: AvatarId) {
     return this.http
-      .put<User>('/api/users/me', { name })
+      .put<User>('/api/users/me', { username, visibility, avatarId })
       .pipe(tap((user) => this.currentUser.set(user)));
   }
 

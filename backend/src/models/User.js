@@ -8,6 +8,16 @@ import bcrypt from "bcryptjs";
 const schema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, minlength: 2 },
+    username: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      minlength: 3,
+      maxlength: 24,
+      match: /^[a-z0-9_]+$/,
+      unique: true,
+      sparse: true,
+    },
     email: {
       type: String,
       required: true,
@@ -17,6 +27,16 @@ const schema = new mongoose.Schema(
     },
     // select:false empêche de renvoyer le hash par défaut dans les requêtes.
     passwordHash: { type: String, required: true, select: false },
+    visibility: {
+      type: String,
+      enum: ["public", "private"],
+      default: "public",
+    },
+    avatarId: {
+      type: String,
+      enum: ["person-man-light", "person-man-medium", "person-man-dark", "person-woman-light", "person-woman-medium", "person-woman-dark", "fruit-apple", "fruit-orange", "fruit-strawberry", "fruit-watermelon", "fruit-pineapple", "fruit-grapes", "fruit-peach", "animal-cat", "animal-dog", "animal-fox", "animal-rabbit", "animal-bear", "animal-panda", "animal-penguin"],
+      default: "animal-cat",
+    },
   },
   { timestamps: true },
 );
@@ -52,8 +72,11 @@ schema.methods.verifyPassword = function (value) {
 schema.methods.toPublic = function () {
   return {
     id: this.id,
-    name: this.name,
+    name: this.username || this.name,
+    username: this.username || this.name,
     email: this.email,
+    visibility: this.visibility || "public",
+    avatarId: this.avatarId || "animal-cat",
     createdAt: this.createdAt,
   };
 };

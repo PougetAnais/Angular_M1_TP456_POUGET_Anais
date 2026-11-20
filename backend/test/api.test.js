@@ -21,14 +21,29 @@ test("health sans dépendre de MongoDB", async () => {
   assert.equal((await r.json()).status, "ok");
 });
 
-test("schémas Mongoose et relation", () => {
+test("schémas Mongoose, pseudo, confidentialité et relation", async () => {
   const u = new User({
     name: "Test",
+    username: "TeSt_User",
     email: "TEST@example.com",
     password: "12345678",
   });
 
+  await u.validate();
   assert.equal(u.email, "test@example.com");
+  assert.equal(u.username, "test_user");
+  assert.equal(u.visibility, "public");
+  assert.equal(u.avatarId, "animal-cat");
+  assert.equal(u.toPublic().username, "test_user");
+  assert.equal(u.toPublic().avatarId, "animal-cat");
+
+  const invalidUsername = new User({
+    name: "Invalid",
+    username: "not-valid!",
+    email: "invalid@example.com",
+    password: "12345678",
+  });
+  await assert.rejects(invalidUsername.validate());
   const t = new Track({
     ownerId: new mongoose.Types.ObjectId(),
     title: "Blues",
@@ -40,4 +55,9 @@ test("schémas Mongoose et relation", () => {
   
   assert.equal(t.title, "Blues");
   assert.equal(Track.schema.path("ownerId").options.ref, "User");
+});
+
+test("le schéma limite les icônes de profil au catalogue", async () => {
+  const u = new User({ name: "Test", username: "avatar_user", email: "avatar@example.com", password: "12345678", avatarId: "not-an-icon" });
+  await assert.rejects(u.validate());
 });

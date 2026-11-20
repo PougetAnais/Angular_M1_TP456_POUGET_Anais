@@ -39,6 +39,7 @@ const allowed = new Set([
   "audio/mp4",
   "audio/x-m4a",
 ]);
+const avatarIds = new Set(["person-man-light", "person-man-medium", "person-man-dark", "person-woman-light", "person-woman-medium", "person-woman-dark", "fruit-apple", "fruit-orange", "fruit-strawberry", "fruit-watermelon", "fruit-pineapple", "fruit-grapes", "fruit-peach", "animal-cat", "animal-dog", "animal-fox", "animal-rabbit", "animal-bear", "animal-panda", "animal-penguin"]);
 
 /**
  * Crée un jeton JWT contenant uniquement l'identité nécessaire à l'API.
@@ -163,25 +164,47 @@ export function createApp() {
    */
   app.post("/api/auth/register", async (req, res, next) => {
     try {
-      const { name, email, password } = req.body || {};
+      const { username, email, password, passwordConfirmation, visibility, avatarId } = req.body || {};
       console.log(`[auth] Tentative d'inscription pour ${email || "email absent"}`);
 
-      if (!name || !email || !password || password.length < 8) {
+      const normalizedUsername = String(username || "").trim().toLowerCase();
+      const normalizedEmail = String(email || "").trim().toLowerCase();
+      if (
+        !/^[a-z0-9_]{3,24}$/.test(normalizedUsername) ||
+        !normalizedEmail ||
+        typeof password !== "string" ||
+        password.length < 8 ||
+        password !== passwordConfirmation ||
+        !["public", "private"].includes(visibility) ||
+        !avatarIds.has(avatarId)
+      ) {
         console.warn("[auth] Inscription refusée : données invalides ou incomplètes");
         return res.status(400).json({
-          message: "Nom, email et mot de passe de 8 caractères requis",
+          message: "Vérifiez le pseudo, l’e-mail, le type de compte et la confirmation du mot de passe",
         });
       }
 
       // Vérifie si l'email est déjà utilisé avant de créer un nouvel utilisateur.
-      if (await User.exists({ email: String(email).toLowerCase() })) {
+      if (await User.exists({ email: normalizedEmail })) {
         console.warn(`[auth] Email déjà utilisé : ${email}`);
         return res.status(409).json({ message: "Email déjà utilisé" });
       }
 
+      if (await User.exists({ username: normalizedUsername })) {
+        console.warn(`[auth] Pseudo déjà utilisé : ${normalizedUsername}`);
+        return res.status(409).json({ message: "Pseudo déjà utilisé" });
+      }
+
       // Crée l'utilisateur et le stocke dans MongoDB. Le mot de passe est haché
       // par le hook pre('validate') défini dans le schéma Mongoose.
-      const user = await User.create({ name, email, password });
+      const user = await User.create({
+        name: normalizedUsername,
+        username: normalizedUsername,
+        email: normalizedEmail,
+        password,
+        visibility,
+        avatarId,
+      });
       console.log(`[auth] Utilisateur créé : ${user.id}`);
       res.status(201).json({ token: token(user), user: user.toPublic() });
     } catch (error) {
@@ -245,12 +268,32 @@ export function createApp() {
     }
   });
 
-  /** Modifie uniquement le nom de l'utilisateur connecté. */
+  /** Modifie le pseudo et la visibilité du profil connecté. */
   app.put("/api/users/me", auth, async (req, res, next) => {
     try {
+      const username = String(req.body?.username || "").trim().toLowerCase();
+      const visibility = req.body?.visibility;
+      const avatarId = req.body?.avatarId;
+
+      if (!/^[a-z0-9_]{3,24}$/.test(username)) {
+        return res.status(400).json({
+          message: "Le pseudo doit contenir de 3 à 24 lettres, chiffres ou caractères _",
+        });
+      }
+      if (!["public", "private"].includes(visibility)) {
+        return res.status(400).json({ message: "Visibilité invalide" });
+      }
+      if (!avatarIds.has(avatarId)) {
+        return res.status(400).json({ message: "Icône de profil invalide" });
+      }
+
+      if (await User.exists({ username, _id: { $ne: req.auth.sub } })) {
+        return res.status(409).json({ message: "Pseudo déjà utilisé" });
+      }
+
       const user = await User.findByIdAndUpdate(
         req.auth.sub,
-        { $set: { name: req.body?.name } },
+        { $set: { name: username, username, visibility, avatarId } },
         { new: true, runValidators: true },
       );
 
@@ -259,7 +302,7 @@ export function createApp() {
         return res.status(404).json({ message: "Utilisateur inconnu" });
       }
 
-      console.log(`[user] Nom mis à jour : ${user.id}`);
+      console.log(`[user] Profil mis à jour : ${user.id}`);
       res.json(user.toPublic());
     } catch (error) {
       console.error("[user] Erreur de mise à jour du profil", error);
@@ -412,6 +455,9 @@ export function createApp() {
   app.use((error, _req, res, next) => {
     console.error("[error] Erreur reçue par le gestionnaire central", error);
 
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: "Pseudo ou adresse e-mail déjà utilisé" });
+    }
     if (
       error instanceof multer.MulterError ||
       error?.message === "Format audio non accepté"

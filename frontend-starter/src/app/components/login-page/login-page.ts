@@ -40,7 +40,7 @@ export class LoginPageComponent {
       next: () => {
         console.debug('[LoginPage] Connexion réussie');
         this.submitting.set(false);
-        void this.router.navigateByUrl('/tracks');
+        void this.router.navigateByUrl('/recommendations');
       },
       error: (error: unknown) => {
         const status = error instanceof HttpErrorResponse ? error.status : 'inconnu';
