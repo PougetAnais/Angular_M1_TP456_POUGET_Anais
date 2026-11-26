@@ -16,7 +16,7 @@ Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock(), c
 describe('AuthService', () => {
   let service: AuthService;
   let httpMock: HttpTestingController;
-  const user = { id: '1', name: 'demo', username: 'demo', email: 'demo@example.com', visibility: 'public' as const, avatarId: 'animal-cat' as const, createdAt: '2024-01-01' };
+  const user = { id: '1', memberId: '#0001', name: 'demo', username: 'demo', email: 'demo@example.com', visibility: 'public' as const, avatarId: 'animal-cat' as const, createdAt: '2024-01-01' };
 
   beforeEach(() => {
     TestBed.resetTestingModule();
@@ -55,6 +55,6 @@ describe('AuthService', () => {
     });
     const request = httpMock.expectOne('/api/users/user-2');
     expect(request.request.method).toBe('GET');
-    request.flush({ id: 'user-2', username: 'anais', visibility: 'public', avatarId: 'animal-cat', createdAt: '2026-01-01', isOwner: false });
+    request.flush({ id: 'user-2', memberId: '#0002', username: 'anais', visibility: 'public', avatarId: 'animal-cat', createdAt: '2026-01-01', isOwner: false });
   });
 });

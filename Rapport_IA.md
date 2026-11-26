@@ -29,3 +29,11 @@ Le besoin d’avatar a d’abord été décrit comme l’ajout et la modificatio
 ### Précision la plus récente sur les interfaces de recommandations
 
 > Sépare clairement les fonctionnalités en deux pages. La page de profil place à gauche tous les avis de la personne, également visibles lorsqu’un autre utilisateur consulte un profil public. Chaque avis y est présenté de manière compacte et peut être déroulé. À droite, affiche l’icône, le pseudo, le type de compte et la date de création ; sur mon propre profil, place aussi le formulaire d’ajout de recommandation. La seconde page est le fil d’actualité : affiche les derniers avis dans un style de réseau social, avec l’icône et le pseudo de l’auteur puis un aperçu compact de son avis, déroulable pour lire toutes les informations. Le fil doit pouvoir être recherché par nom d’anime/manga et par pseudo. Le lien d’un auteur mène à son profil.
+
+### Amis et recherche
+
+> Réalise la partie « Amis et recherche » en poursuivant ce qui est déjà commencé. Ajoute une page Amis avec deux vues : à l’arrivée, afficher mes amis et permettre d’ouvrir leur profil ; en haut à droite, un bouton ouvre la vue des demandes d’amis reçues et affiche leur nombre à côté de son libellé. Dans cette vue, un bouton en haut à gauche revient à la liste d’amis. Pour envoyer une demande, l’utilisateur ouvre le profil d’un membre et clique sur « Envoyer une demande d’amitié ». Prévois aussi la recherche des membres par pseudo, l’envoi et la gestion des demandes, ainsi que la mise à jour des documentations et du rapport.
+
+### Identifiant public pour retrouver les amis
+
+> Pour simplifier la recherche d’amis, donne à chaque personne un identifiant qui s’incrémente à partir de `0001`, précédé de `#`. Affiche cet identifiant sur son profil à côté du pseudo, en plus petit.

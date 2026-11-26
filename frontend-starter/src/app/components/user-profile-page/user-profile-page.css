@@ -1,4 +1,8 @@
 :host { display: block; max-width: 1180px; margin: 0 auto; }
+.friend-action { display: block; width: 100%; margin-top: .85rem; padding: .7rem 1rem; border: 0; border-radius: 10px; color: #fff; background: #236b58; font: inherit; font-weight: 650; cursor: pointer; }
+.friend-status { margin: .8rem 0 0; padding: .65rem .8rem; border-radius: 10px; color: #315846; background: #e9f3ec; text-align: center; }
+.profile-name { display: flex; align-items: baseline; gap: .5rem; }
+.member-id { color: #728078; font-size: .72em; font-weight: 500; }
 .user-profile-page { margin-block: 1.5rem; }
 .profile-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, .9fr); align-items: start; gap: 1.25rem; }
 .profile-reviews, .profile-sidebar { display: grid; gap: 1rem; min-width: 0; }

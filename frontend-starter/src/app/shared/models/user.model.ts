@@ -9,6 +9,7 @@ export type AvatarId =
 /** Données publiques d'un compte renvoyées par l'API. */
 export interface User {
   id: string;
+  memberId: string;
   name: string;
   username: string;
   email: string;

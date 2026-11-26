@@ -1,0 +1,29 @@
+:host { display: block; max-width: 900px; margin: 1.5rem auto; }
+.friends-page { display: grid; gap: 1rem; }
+.friends-heading, .member-card, .member-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.friends-heading, .search-panel, .member-list { padding: 1.2rem; border-radius: 16px; background: #fff; box-shadow: 0 5px 18px #17312a12; }
+.friends-heading h1, .friends-heading p, .search-panel h2, .member-list h2 { margin: .2rem 0; }
+.eyebrow { color: #1d755e; font-size: .75rem; font-weight: 700; letter-spacing: .12em; }
+.request-heading { flex: 1; }
+.heading-spacer { width: 44px; }
+.tab-button, .back-button, button { border: 0; border-radius: 10px; padding: .65rem .9rem; color: #fff; background: #236b58; font: inherit; font-weight: 650; cursor: pointer; }
+.back-button { width: 44px; height: 44px; padding: 0; font-size: 1.4rem; }
+.count { display: inline-grid; min-width: 1.6rem; height: 1.6rem; place-items: center; padding: 0 .35rem; border-radius: 999px; color: #175943; background: #e2f2e9; font-size: .85rem; }
+.search-panel { display: grid; gap: .75rem; }
+.search-panel input { width: 100%; padding: .75rem .9rem; border: 1px solid #cbd8d0; border-radius: 10px; font: inherit; }
+.member-results, .member-list { display: grid; gap: .7rem; }
+.member-list h2 { margin-bottom: .5rem; }
+.member-card, .member-row { padding: .8rem; border: 1px solid #e5ece7; border-radius: 12px; background: #fcfdfc; }
+.member-identity, .member-actions { display: flex; align-items: center; gap: .7rem; color: #243b31; text-decoration: none; font-weight: 650; }
+.member-identity:hover, .profile-link:hover { text-decoration: underline; }
+.member-id { display: inline-block; margin-left: .25rem; color: #728078; font-size: .75em; font-weight: 500; }
+.member-identity svg { width: 48px; height: 48px; border-radius: 50%; }
+.member-actions { flex-wrap: wrap; }
+.profile-link, .text-link { color: #17674f; }
+.remove-button { background: #8b3d37; }
+.relationship-label { padding: .45rem .7rem; border-radius: 999px; color: #425c4e; background: #e9f0eb; font-size: .9rem; }
+.empty-state { margin: .3rem 0; padding: 1rem; border-radius: 12px; color: #53655b; background: #f5f8f5; }
+.notice { margin: 0; padding: .8rem 1rem; border-radius: 10px; }
+.error { color: #8b2620; background: #fff0ee; }
+.success { color: #155c3e; background: #eaf7ef; }
+@media (max-width: 600px) { .friends-heading, .member-card, .member-row { align-items: flex-start; flex-direction: column; } .member-actions { width: 100%; justify-content: flex-start; } }

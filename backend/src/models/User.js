@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { formatMemberId } from "../utils/member-id.js";
 
 /*
  * Un schéma Mongoose décrit la forme des documents MongoDB et leurs règles de
@@ -7,6 +8,7 @@ import bcrypt from "bcryptjs";
  */
 const schema = new mongoose.Schema(
   {
+    memberNumber: { type: Number, min: 1 },
     name: { type: String, required: true, trim: true, minlength: 2 },
     username: {
       type: String,
@@ -41,6 +43,8 @@ const schema = new mongoose.Schema(
   { timestamps: true },
 );
 
+schema.index({ memberNumber: 1 }, { unique: true, sparse: true });
+
 /**
  * Virtual property : `password` n'est pas stocké dans MongoDB.
  * Le setter conserve temporairement le mot de passe en mémoire pour que le
@@ -72,6 +76,7 @@ schema.methods.verifyPassword = function (value) {
 schema.methods.toPublic = function () {
   return {
     id: this.id,
+    memberId: formatMemberId(this.memberNumber),
     name: this.username || this.name,
     username: this.username || this.name,
     email: this.email,

@@ -49,13 +49,21 @@
       <aside class="profile-sidebar">
         <section class="user-card">
           <svg class="profile-avatar" viewBox="0 0 100 100" role="img" [attr.aria-label]="'Avatar de ' + user.username"><use [attr.href]="avatarPresetUrl(user.avatarId)"></use></svg>
-          <h2>{{ '@' + user.username }}</h2>
+          <h2 class="profile-name"><span>{{ '@' + user.username }}</span><small class="member-id">{{ user.memberId }}</small></h2>
           <dl>
             @if (user.email) { <div><dt>E-mail</dt><dd>{{ user.email }}</dd></div> }
             <div><dt>Type de compte</dt><dd>{{ user.visibility === 'public' ? 'Public' : 'Privé' }}</dd></div>
             <div><dt>Membre depuis</dt><dd>{{ user.createdAt.slice(0, 10) }}</dd></div>
           </dl>
           @if (user.isOwner) { <a class="settings-link" routerLink="/profile/settings">Modifier mon profil</a> }
+          @if (!user.isOwner && isAuthenticated()) {
+            @switch (friendship()) {
+              @case ('none') { <button type="button" class="friend-action" (click)="sendFriendRequest()">Envoyer une demande d’amitié</button> }
+              @case ('sent') { <p class="friend-status">Demande d’amitié envoyée</p> }
+              @case ('received') { <button type="button" class="friend-action" (click)="acceptFriendRequest()">Accepter la demande d’amitié</button> }
+              @case ('friends') { <p class="friend-status">Vous êtes amis</p> }
+            }
+          }
         </section>
 
         @if (user.isOwner) {

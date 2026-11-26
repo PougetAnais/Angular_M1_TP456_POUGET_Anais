@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import { createApp } from "./app.js";
 import { User } from "./models/User.js";
+import { Counter } from "./models/Counter.js";
+import { nextMemberNumber } from "./utils/member-id.js";
 
 // Le port et l'URI viennent de l'environnement du backend, jamais d'Angular.
 const port = process.env.PORT || 3000;
@@ -29,12 +31,23 @@ try {
 }
 
 try {
+  // Continue la séquence après les comptes déjà présents et attribue un ID aux anciens comptes.
+  const highestMember = await User.findOne({ memberNumber: { $type: "number" } }).sort({ memberNumber: -1 }).select("memberNumber").lean();
+  await Counter.updateOne({ _id: "memberNumber" }, { $max: { sequence: highestMember?.memberNumber || 0 } }, { upsert: true });
+  const legacyUsers = await User.find({ memberNumber: { $exists: false } }).sort({ createdAt: 1, _id: 1 }).select("_id").lean();
+  for (const legacyUser of legacyUsers) {
+    const memberNumber = await nextMemberNumber();
+    await User.updateOne({ _id: legacyUser._id, memberNumber: { $exists: false } }, { $set: { memberNumber } });
+  }
+  console.log(`[startup] Identifiants publics attribués aux anciens comptes : ${legacyUsers.length}`);
+
   // Le compte de démonstration facilite les premiers tests des étudiants.
   const demoEmail = "demo@example.com";
   const demoExists = await User.exists({ email: demoEmail });
 
   if (!demoExists) {
     const demoUser = await User.create({
+      memberNumber: await nextMemberNumber(),
       name: "Demo",
       email: demoEmail,
       password: "Demo1234!",

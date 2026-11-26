@@ -6,6 +6,7 @@ import { RegisterPageComponent } from './components/register-page/register-page'
 import { RecommendationsPageComponent } from './components/recommendations-page/recommendations-page';
 import { TracksPageComponent } from './components/tracks-page/tracks-page';
 import { UserProfilePageComponent } from './components/user-profile-page/user-profile-page';
+import { FriendsPageComponent } from './components/friends-page/friends-page';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'recommendations' },
@@ -14,6 +15,7 @@ export const routes: Routes = [
   { path: 'profile/settings', component: ProfilePageComponent, canActivate: [authGuard] },
   { path: 'profile', component: UserProfilePageComponent, canActivate: [authGuard] },
   { path: 'users/:id', component: UserProfilePageComponent },
+  { path: 'friends', component: FriendsPageComponent, canActivate: [authGuard] },
   { path: 'recommendations', component: RecommendationsPageComponent },
   { path: 'tracks', component: TracksPageComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: 'recommendations' },

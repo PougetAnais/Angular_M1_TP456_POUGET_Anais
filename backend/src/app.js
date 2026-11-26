@@ -10,6 +10,8 @@ import mongoose from "mongoose";
 import { User } from "./models/User.js";
 import { Track } from "./models/Track.js";
 import { Recommendation } from "./models/Recommendation.js";
+import { Friendship } from "./models/Friendship.js";
+import { nextMemberNumber, formatMemberId, parseMemberIdSearch } from "./utils/member-id.js";
 
 // Les fichiers audio restent sur le disque du serveur dans ce TP.
 // MongoDB ne conserve que leurs métadonnées : titre, nom, taille, etc.
@@ -288,6 +290,7 @@ export function createApp() {
       // Crée l'utilisateur et le stocke dans MongoDB. Le mot de passe est haché
       // par le hook pre('validate') défini dans le schéma Mongoose.
       const user = await User.create({
+        memberNumber: await nextMemberNumber(),
         name: normalizedUsername,
         username: normalizedUsername,
         email: normalizedEmail,
@@ -358,21 +361,136 @@ export function createApp() {
     }
   });
 
+  /** Recherche de membres par pseudo pour les utilisateurs connectés. */
+  app.get("/api/users/search", auth, async (req, res, next) => {
+    try {
+      const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      if (query.length > 24) return res.status(400).json({ message: "La recherche est limitée à 24 caractères" });
+      if (query.length < 2) return res.json({ items: [] });
+      const memberNumber = parseMemberIdSearch(query);
+      const searchFields = [{ username: { $regex: escapeRegex(query), $options: "i" } }, { name: { $regex: escapeRegex(query), $options: "i" } }];
+      if (memberNumber !== null) searchFields.push({ memberNumber });
+      const users = await User.find({
+        _id: { $ne: req.auth.sub },
+        $or: searchFields,
+      }).select("username name avatarId visibility memberNumber").sort({ username: 1 }).limit(20).lean();
+      const relationships = await Friendship.find({
+        $or: [{ requesterId: req.auth.sub, recipientId: { $in: users.map((user) => user._id) } }, { recipientId: req.auth.sub, requesterId: { $in: users.map((user) => user._id) } }],
+      }).select("requesterId recipientId status").lean();
+      return res.json({ items: users.map((user) => {
+        const relationship = relationships.find((item) => String(item.requesterId) === String(user._id) || String(item.recipientId) === String(user._id));
+        let state = "none";
+        if (relationship?.status === "accepted") state = "friends";
+        else if (relationship) state = String(relationship.requesterId) === String(req.auth.sub) ? "sent" : "received";
+        return { id: String(user._id), memberId: formatMemberId(user.memberNumber), username: user.username || user.name, avatarId: user.avatarId || "animal-cat", visibility: user.visibility || "public", relationship: state };
+      }) });
+    } catch (error) {
+      console.error("[friends] Recherche de membres impossible", error);
+      return next(error);
+    }
+  });
+
+  app.get("/api/friends/status/:userId", auth, async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.userId)) return res.status(404).json({ message: "Utilisateur introuvable" });
+      const relationship = await Friendship.findOne({ $or: [
+        { requesterId: req.auth.sub, recipientId: req.params.userId },
+        { requesterId: req.params.userId, recipientId: req.auth.sub },
+      ] }).lean();
+      const state = !relationship ? "none" : relationship.status === "accepted" ? "friends" : String(relationship.requesterId) === String(req.auth.sub) ? "sent" : "received";
+      return res.json({ state, requestId: relationship?.status === "pending" ? String(relationship._id) : null });
+    } catch (error) { console.error("[friends] Lecture de la relation impossible", error); return next(error); }
+  });
+
+  app.get("/api/friends", auth, async (req, res, next) => {
+    try {
+      const relations = await Friendship.find({ status: "accepted", $or: [{ requesterId: req.auth.sub }, { recipientId: req.auth.sub }] }).sort({ updatedAt: -1 }).lean();
+      const ids = relations.map((relation) => String(relation.requesterId) === String(req.auth.sub) ? relation.recipientId : relation.requesterId);
+      const users = await User.find({ _id: { $in: ids } }).select("username name avatarId visibility memberNumber").lean();
+      return res.json({ items: users.map((user) => ({ id: String(user._id), memberId: formatMemberId(user.memberNumber), username: user.username || user.name, avatarId: user.avatarId || "animal-cat", visibility: user.visibility || "public" })) });
+    } catch (error) { console.error("[friends] Liste des amis impossible", error); return next(error); }
+  });
+
+  app.get("/api/friends/requests", auth, async (req, res, next) => {
+    try {
+      const direction = req.query.direction === "outgoing" ? "outgoing" : "incoming";
+      const filter = { status: "pending", [direction === "incoming" ? "recipientId" : "requesterId"]: req.auth.sub };
+      const relations = await Friendship.find(filter).sort({ createdAt: -1 }).lean();
+      const ids = relations.map((relation) => direction === "incoming" ? relation.requesterId : relation.recipientId);
+      const users = await User.find({ _id: { $in: ids } }).select("username name avatarId visibility memberNumber").lean();
+      const byId = new Map(users.map((user) => [String(user._id), user]));
+      return res.json({ items: relations.map((relation) => {
+        const id = direction === "incoming" ? relation.requesterId : relation.recipientId;
+        const user = byId.get(String(id));
+        return user && { requestId: String(relation._id), id: String(user._id), memberId: formatMemberId(user.memberNumber), username: user.username || user.name, avatarId: user.avatarId || "animal-cat", visibility: user.visibility || "public", createdAt: relation.createdAt };
+      }).filter(Boolean) });
+    } catch (error) { console.error("[friends] Demandes impossibles à charger", error); return next(error); }
+  });
+
+  app.post("/api/friends/requests/:userId", auth, async (req, res, next) => {
+    try {
+      const recipientId = req.params.userId;
+      if (!mongoose.isValidObjectId(recipientId) || String(recipientId) === String(req.auth.sub)) return res.status(400).json({ message: "Destinataire invalide" });
+      if (!await User.exists({ _id: recipientId })) return res.status(404).json({ message: "Utilisateur introuvable" });
+      const existing = await Friendship.findOne({ $or: [{ requesterId: req.auth.sub, recipientId }, { requesterId: recipientId, recipientId: req.auth.sub }] });
+      if (existing) return res.status(409).json({ message: existing.status === "accepted" ? "Vous êtes déjà amis" : "Une demande existe déjà" });
+      const request = await Friendship.create({ requesterId: req.auth.sub, recipientId });
+      return res.status(201).json({ id: String(request._id), state: "sent" });
+    } catch (error) { console.error("[friends] Envoi de demande impossible", error); return next(error); }
+  });
+
+  app.post("/api/friends/requests/:requestId/accept", auth, async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.requestId)) return res.status(404).json({ message: "Demande introuvable" });
+      const request = await Friendship.findOneAndUpdate({ _id: req.params.requestId, recipientId: req.auth.sub, status: "pending" }, { $set: { status: "accepted" } }, { new: true });
+      if (!request) return res.status(404).json({ message: "Demande introuvable" });
+      return res.json({ id: String(request._id), state: "friends" });
+    } catch (error) { console.error("[friends] Acceptation impossible", error); return next(error); }
+  });
+
+  app.delete("/api/friends/requests/:requestId", auth, async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.requestId)) return res.status(404).json({ message: "Demande introuvable" });
+      const request = await Friendship.findOneAndDelete({ _id: req.params.requestId, status: "pending", $or: [{ requesterId: req.auth.sub }, { recipientId: req.auth.sub }] });
+      if (!request) return res.status(404).json({ message: "Demande introuvable" });
+      return res.status(204).end();
+    } catch (error) { console.error("[friends] Suppression de demande impossible", error); return next(error); }
+  });
+
+  app.delete("/api/friends/:userId", auth, async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.userId)) return res.status(404).json({ message: "Relation introuvable" });
+      const result = await Friendship.findOneAndDelete({ status: "accepted", $or: [
+        { requesterId: req.auth.sub, recipientId: req.params.userId },
+        { requesterId: req.params.userId, recipientId: req.auth.sub },
+      ] });
+      if (!result) return res.status(404).json({ message: "Relation introuvable" });
+      return res.status(204).end();
+    } catch (error) { console.error("[friends] Suppression d’ami impossible", error); return next(error); }
+  });
+
   /** Profil consultable par identifiant ; l’e-mail reste privé. */
   app.get("/api/users/:id", optionalAuth, async (req, res, next) => {
     try {
       if (!mongoose.isValidObjectId(req.params.id)) {
         return res.status(404).json({ message: "Profil introuvable" });
       }
-      const user = await User.findById(req.params.id).select("username name visibility avatarId createdAt email");
+      const user = await User.findById(req.params.id).select("username name visibility avatarId createdAt email memberNumber");
       if (!user) return res.status(404).json({ message: "Profil introuvable" });
 
       const isOwner = Boolean(req.auth?.sub && String(user.id) === String(req.auth.sub));
-      if (user.visibility === "private" && !isOwner) {
+      const isFriend = Boolean(req.auth?.sub && await Friendship.exists({ status: "accepted", $or: [
+        { requesterId: req.auth.sub, recipientId: user.id },
+        { requesterId: user.id, recipientId: req.auth.sub },
+      ] }));
+      // Les métadonnées minimales d’un profil privé sont consultables après connexion
+      // afin qu’un membre puisse demander l’accès ; ses avis restent protégés.
+      if (user.visibility === "private" && !isOwner && !isFriend && !req.auth?.sub) {
         return res.status(404).json({ message: "Profil introuvable" });
       }
       return res.json({
         id: user.id,
+        memberId: formatMemberId(user.memberNumber),
         username: user.username || user.name,
         visibility: user.visibility || "public",
         avatarId: user.avatarId || "animal-cat",
@@ -445,7 +563,12 @@ export function createApp() {
 
       // Les recommandations d’un profil privé ne sont visibles que par leur auteur.
       const accessConditions = [{ visibility: "public" }, { visibility: { $exists: false } }];
-      if (req.auth?.sub) accessConditions.push({ _id: req.auth.sub });
+      if (req.auth?.sub) {
+        accessConditions.push({ _id: req.auth.sub });
+        const relations = await Friendship.find({ status: "accepted", $or: [{ requesterId: req.auth.sub }, { recipientId: req.auth.sub }] }).select("requesterId recipientId").lean();
+        const friendIds = relations.map((relation) => String(relation.requesterId) === String(req.auth.sub) ? relation.recipientId : relation.requesterId);
+        if (friendIds.length) accessConditions.push({ _id: { $in: friendIds } });
+      }
       const authorFilter = { $or: accessConditions };
       if (authorQuery) {
         const usernamePattern = { $regex: escapeRegex(authorQuery), $options: "i" };
@@ -579,7 +702,12 @@ export function createApp() {
         return res.status(404).json({ message: "Image introuvable" });
       }
       const owner = await User.findById(recommendation.ownerId).select("visibility");
-      if (!owner || (owner.visibility === "private" && String(owner.id) !== String(req.auth.sub))) {
+      const isOwner = Boolean(owner && req.auth?.sub && String(owner.id) === String(req.auth.sub));
+      const isFriend = Boolean(owner && req.auth?.sub && await Friendship.exists({ status: "accepted", $or: [
+        { requesterId: req.auth.sub, recipientId: owner.id },
+        { requesterId: owner.id, recipientId: req.auth.sub },
+      ] }));
+      if (!owner || (owner.visibility === "private" && !isOwner && !isFriend)) {
         return res.status(404).json({ message: "Image introuvable" });
       }
       res.setHeader("Cache-Control", "private, no-store");

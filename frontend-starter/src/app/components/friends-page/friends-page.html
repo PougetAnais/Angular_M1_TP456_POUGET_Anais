@@ -1,0 +1,59 @@
+<section class="friends-page">
+  <header class="friends-heading">
+    @if (view() === 'friends') {
+      <div><p class="eyebrow">COMMUNAUTÉ</p><h1>Mes amis</h1></div>
+      <button type="button" class="tab-button" (click)="showRequests()">Demandes d’amis <span class="count">{{ requests().length }}</span></button>
+    } @else {
+      <button type="button" class="back-button" (click)="showFriends()" aria-label="Revenir à la liste d’amis">←</button>
+      <div class="request-heading"><p class="eyebrow">COMMUNAUTÉ</p><h1>Demandes d’amis <span class="count">{{ requests().length }}</span></h1></div>
+      <span class="heading-spacer"></span>
+    }
+  </header>
+
+  @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }
+  @if (success()) { <p class="notice success" role="status">{{ success() }}</p> }
+
+  @if (view() === 'friends') {
+    <section class="search-panel" aria-label="Rechercher des utilisateurs">
+      <h2>Retrouver des membres</h2>
+      <label for="friend-search">Rechercher par pseudo</label>
+      <input id="friend-search" type="search" [formControl]="query" placeholder="Pseudo ou identifiant (ex. #0001)" autocomplete="off" />
+      @if (query.value.trim().length >= 2) {
+        <div class="member-results">
+          @for (user of results(); track user.id) {
+            <article class="member-row">
+              <a class="member-identity" [routerLink]="['/users', user.id]"><svg viewBox="0 0 100 100" aria-hidden="true"><use [attr.href]="avatarPresetUrl(user.avatarId)"></use></svg><span>@{{ user.username }} <small class="member-id">{{ user.memberId }}</small></span></a>
+              @switch (user.relationship) {
+                @case ('none') { <button type="button" (click)="send(user)">Envoyer une demande</button> }
+                @case ('sent') { <span class="relationship-label">Demande envoyée</span> }
+                @case ('received') { <button type="button" class="text-link" (click)="showRequests()">Demande reçue · voir</button> }
+                @case ('friends') { <span class="relationship-label">Déjà ami·e</span> }
+              }
+            </article>
+          } @empty { <p class="empty-state">Aucun membre trouvé.</p> }
+        </div>
+      }
+    </section>
+
+    <section class="member-list" aria-label="Liste de mes amis">
+      <h2>Mes amis <span class="count">{{ friends().length }}</span></h2>
+      @if (loading()) { <p role="status">Chargement de vos amis…</p> }
+      @for (friend of friends(); track friend.id) {
+        <article class="member-card">
+          <a class="member-identity" [routerLink]="['/users', friend.id]"><svg viewBox="0 0 100 100" aria-hidden="true"><use [attr.href]="avatarPresetUrl(friend.avatarId)"></use></svg><span>@{{ friend.username }} <small class="member-id">{{ friend.memberId }}</small></span></a>
+          <div class="member-actions"><a class="profile-link" [routerLink]="['/users', friend.id]">Voir le profil</a><button type="button" class="remove-button" (click)="removeFriend(friend)">Retirer</button></div>
+        </article>
+      } @empty { @if (!loading()) { <p class="empty-state">Vous n’avez pas encore d’amis. Recherchez un pseudo pour envoyer une demande.</p> } }
+    </section>
+  } @else {
+    <section class="member-list" aria-label="Demandes d’amis reçues">
+      <h2>Demandes reçues</h2>
+      @for (request of requests(); track request.requestId) {
+        <article class="member-card">
+          <a class="member-identity" [routerLink]="['/users', request.id]"><svg viewBox="0 0 100 100" aria-hidden="true"><use [attr.href]="avatarPresetUrl(request.avatarId)"></use></svg><span>@{{ request.username }} <small class="member-id">{{ request.memberId }}</small></span></a>
+          <div class="member-actions"><button type="button" (click)="accept(request)">Accepter</button><button type="button" class="remove-button" (click)="decline(request)">Refuser</button></div>
+        </article>
+      } @empty { <p class="empty-state">Aucune demande reçue pour le moment.</p> }
+    </section>
+  }
+</section>

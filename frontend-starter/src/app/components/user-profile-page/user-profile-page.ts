@@ -8,6 +8,8 @@ import { Recommendation, RecommendationDraft } from '../../shared/models/recomme
 import { UserProfile } from '../../shared/models/user-profile.model';
 import { AvatarId } from '../../shared/models/user.model';
 import { AuthService } from '../../shared/services/auth.service';
+import { FriendService } from '../../shared/services/friend.service';
+import { RelationshipState } from '../../shared/models/friend.model';
 import { RecommendationService } from '../../shared/services/recommendation.service';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -23,9 +25,13 @@ export class UserProfilePageComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
   private readonly recommendationsApi = inject(RecommendationService);
+  private readonly friendsApi = inject(FriendService);
   private routeSubscription?: Subscription;
 
   readonly profile = signal<UserProfile | null>(null);
+  readonly isAuthenticated = this.auth.token;
+  readonly friendship = signal<RelationshipState>('none');
+  readonly friendshipRequestId = signal<string | null>(null);
   readonly recommendations = signal<Recommendation[]>([]);
   readonly imageSources = signal<Record<string, string>>({});
   readonly page = signal(1);
@@ -71,6 +77,7 @@ export class UserProfilePageComponent implements OnInit, OnDestroy {
       next: (user) => {
         this.profile.set({
           id: user.id,
+          memberId: user.memberId,
           username: user.username,
           visibility: user.visibility,
           avatarId: user.avatarId,
@@ -94,6 +101,7 @@ export class UserProfilePageComponent implements OnInit, OnDestroy {
     this.auth.userProfile(id).subscribe({
       next: (profile) => {
         this.profile.set(profile);
+        this.loadFriendship(profile);
         this.loading.set(false);
         this.loadRecommendations(1);
       },
@@ -103,6 +111,32 @@ export class UserProfilePageComponent implements OnInit, OnDestroy {
         this.error.set(apiErrorMessage(error, 'Ce profil est introuvable ou privé.'));
         this.loading.set(false);
       },
+    });
+  }
+
+  private loadFriendship(profile: UserProfile): void {
+    if (profile.isOwner || !this.auth.token()) return;
+    this.friendsApi.status(profile.id).subscribe({
+      next: (status) => { this.friendship.set(status.state); this.friendshipRequestId.set(status.requestId); },
+      error: (error: unknown) => console.error('[UserProfilePage] État de la relation indisponible', error),
+    });
+  }
+
+  sendFriendRequest(): void {
+    const profile = this.profile();
+    if (!profile || profile.isOwner) return;
+    this.friendsApi.sendRequest(profile.id).subscribe({
+      next: () => { this.friendship.set('sent'); this.success.set(`Demande envoyée à @${profile.username}.`); },
+      error: (error: unknown) => this.error.set(apiErrorMessage(error, 'Impossible d’envoyer la demande d’amitié.')),
+    });
+  }
+
+  acceptFriendRequest(): void {
+    const requestId = this.friendshipRequestId();
+    if (!requestId) return;
+    this.friendsApi.accept(requestId).subscribe({
+      next: () => { this.friendship.set('friends'); this.friendshipRequestId.set(null); this.success.set('Cette personne a été ajoutée à vos amis.'); },
+      error: (error: unknown) => this.error.set(apiErrorMessage(error, 'Impossible d’accepter cette demande.')),
     });
   }
 
