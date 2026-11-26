@@ -6,17 +6,21 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import mongoose from "mongoose";
 import { User } from "./models/User.js";
 import { Track } from "./models/Track.js";
+import { Recommendation } from "./models/Recommendation.js";
 
 // Les fichiers audio restent sur le disque du serveur dans ce TP.
 // MongoDB ne conserve que leurs métadonnées : titre, nom, taille, etc.
 const UPLOADS = path.resolve("data/uploads");
+const RECOMMENDATION_IMAGES = path.join(UPLOADS, "recommendations");
 
 try {
   // mkdirSync est utilisé au démarrage : l'application doit disposer de ce
   // dossier avant de pouvoir accepter le premier upload.
   fs.mkdirSync(UPLOADS, { recursive: true });
+  fs.mkdirSync(RECOMMENDATION_IMAGES, { recursive: true });
   console.log(`[startup] Dossier des uploads prêt : ${UPLOADS}`);
 } catch (error) {
   console.error("[startup] Impossible de créer le dossier des uploads", error);
@@ -40,6 +44,28 @@ const allowed = new Set([
   "audio/x-m4a",
 ]);
 const avatarIds = new Set(["person-man-light", "person-man-medium", "person-man-dark", "person-woman-light", "person-woman-medium", "person-woman-dark", "fruit-apple", "fruit-orange", "fruit-strawberry", "fruit-watermelon", "fruit-pineapple", "fruit-grapes", "fruit-peach", "animal-cat", "animal-dog", "animal-fox", "animal-rabbit", "animal-bear", "animal-panda", "animal-penguin"]);
+const MAX_RECOMMENDATION_IMAGE_SIZE = 5 * 1024 * 1024;
+const recommendationImageTypes = new Map([
+  ["image/jpeg", ".jpg"],
+  ["image/png", ".png"],
+  ["image/webp", ".webp"],
+  ["image/gif", ".gif"],
+  ["image/avif", ".avif"],
+]);
+const recommendationImageTypesByExtension = new Map([
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".png", "image/png"],
+  [".webp", "image/webp"],
+  [".gif", "image/gif"],
+  [".avif", "image/avif"],
+]);
+
+function recommendationImageMimeType(file) {
+  const reportedType = String(file.mimetype || "").toLowerCase();
+  if (recommendationImageTypes.has(reportedType)) return reportedType;
+  return recommendationImageTypesByExtension.get(path.extname(file.originalname).toLowerCase()) || null;
+}
 
 /**
  * Crée un jeton JWT contenant uniquement l'identité nécessaire à l'API.
@@ -73,6 +99,22 @@ function auth(req, res, next) {
     next();
   } catch (error) {
     console.error("[auth] Token invalide ou expiré", error);
+    return res.status(401).json({ message: "Jeton invalide ou expiré" });
+  }
+}
+
+/** Autorise les visiteurs anonymes aux ressources publiques et authentifie les autres. */
+function optionalAuth(req, res, next) {
+  const raw = req.headers.authorization;
+  if (!raw) return next();
+  if (!raw.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Format Authorization invalide" });
+  }
+  try {
+    req.auth = jwt.verify(raw.slice(7), SECRET);
+    return next();
+  } catch (error) {
+    console.warn("[auth] Jeton invalide pour une ressource publique", error.message);
     return res.status(401).json({ message: "Jeton invalide ou expiré" });
   }
 }
@@ -119,6 +161,54 @@ const upload = multer({
     return callback(error);
   },
 });
+
+const recommendationImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_request, _file, callback) => callback(null, RECOMMENDATION_IMAGES),
+    filename: (_request, file, callback) => {
+      const extension = recommendationImageTypes.get(recommendationImageMimeType(file));
+      callback(null, crypto.randomUUID() + extension);
+    },
+  }),
+  limits: { fileSize: MAX_RECOMMENDATION_IMAGE_SIZE },
+  fileFilter: (_request, file, callback) => {
+    if (recommendationImageMimeType(file)) return callback(null, true);
+    callback(new Error("Format d’image non accepté (JPG, PNG, WebP, GIF ou AVIF)"));
+  },
+});
+
+async function removeRecommendationImage(filename) {
+  if (!filename) return;
+  try {
+    await fsPromises.unlink(path.join(RECOMMENDATION_IMAGES, filename));
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.error("[recommendations] Suppression du fichier image impossible", error);
+    }
+  }
+}
+
+function recommendationFields(body) {
+  const animeTitle = String(body?.animeTitle || "").trim();
+  const rawRating = body?.rating;
+  const rating = Number(rawRating);
+  const comment = String(body?.comment || "").trim();
+  const seasonOrVolume = String(body?.seasonOrVolume || "").trim();
+  if (!animeTitle || animeTitle.length > 120) {
+    return { error: "Le titre de l’anime est obligatoire (120 caractères maximum)" };
+  }
+  if (rawRating === undefined || String(rawRating).trim() === "" || !Number.isFinite(rating) || rating < 0 || rating > 10) {
+    return { error: "La note doit être comprise entre 0 et 10" };
+  }
+  if (comment.length > 2000 || seasonOrVolume.length > 100) {
+    return { error: "Le commentaire ou la saison/le tome est trop long" };
+  }
+  return { value: { animeTitle, rating, comment, seasonOrVolume } };
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /**
  * Construit l'application Express sans ouvrir de port.
@@ -268,6 +358,34 @@ export function createApp() {
     }
   });
 
+  /** Profil consultable par identifiant ; l’e-mail reste privé. */
+  app.get("/api/users/:id", optionalAuth, async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(404).json({ message: "Profil introuvable" });
+      }
+      const user = await User.findById(req.params.id).select("username name visibility avatarId createdAt email");
+      if (!user) return res.status(404).json({ message: "Profil introuvable" });
+
+      const isOwner = Boolean(req.auth?.sub && String(user.id) === String(req.auth.sub));
+      if (user.visibility === "private" && !isOwner) {
+        return res.status(404).json({ message: "Profil introuvable" });
+      }
+      return res.json({
+        id: user.id,
+        username: user.username || user.name,
+        visibility: user.visibility || "public",
+        avatarId: user.avatarId || "animal-cat",
+        createdAt: user.createdAt,
+        ...(isOwner ? { email: user.email } : {}),
+        isOwner,
+      });
+    } catch (error) {
+      console.error("[user] Lecture du profil public impossible", error);
+      return next(error);
+    }
+  });
+
   /** Modifie le pseudo et la visibilité du profil connecté. */
   app.put("/api/users/me", auth, async (req, res, next) => {
     try {
@@ -307,6 +425,175 @@ export function createApp() {
     } catch (error) {
       console.error("[user] Erreur de mise à jour du profil", error);
       next(error);
+    }
+  });
+
+  /** Fil public récent et recherche par titre d’anime. */
+  app.get("/api/recommendations", optionalAuth, async (req, res, next) => {
+    try {
+      const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(20, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
+      const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      const authorQuery = typeof req.query.author === "string" ? req.query.author.trim() : "";
+      const authorId = typeof req.query.authorId === "string" ? req.query.authorId.trim() : "";
+      if (query.length > 100) {
+        return res.status(400).json({ message: "La recherche est limitée à 100 caractères" });
+      }
+      if (authorQuery.length > 24) {
+        return res.status(400).json({ message: "La recherche de pseudo est limitée à 24 caractères" });
+      }
+
+      // Les recommandations d’un profil privé ne sont visibles que par leur auteur.
+      const accessConditions = [{ visibility: "public" }, { visibility: { $exists: false } }];
+      if (req.auth?.sub) accessConditions.push({ _id: req.auth.sub });
+      const authorFilter = { $or: accessConditions };
+      if (authorQuery) {
+        const usernamePattern = { $regex: escapeRegex(authorQuery), $options: "i" };
+        authorFilter.$and = [{ $or: [{ username: usernamePattern }, { name: usernamePattern }] }];
+      }
+      const visibleAuthors = await User.find(authorFilter).select("_id username name avatarId").lean();
+      const visibleAuthorIds = visibleAuthors.map((author) => String(author._id));
+      if (authorId && !mongoose.isValidObjectId(authorId)) {
+        return res.status(404).json({ message: "Profil introuvable" });
+      }
+      if (authorId && !visibleAuthorIds.includes(authorId)) {
+        return res.status(404).json({ message: "Profil introuvable ou privé" });
+      }
+      const filter = { ownerId: authorId || { $in: visibleAuthors.map((author) => author._id) } };
+      if (query) filter.animeTitle = { $regex: escapeRegex(query), $options: "i" };
+
+      const [recommendations, total] = await Promise.all([
+        Recommendation.find(filter)
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .select("+imageFilename")
+          .populate({ path: "ownerId", select: "username name avatarId" }),
+        Recommendation.countDocuments(filter),
+      ]);
+
+      const items = recommendations.map((recommendation) => ({
+        ...recommendation.toPublic(),
+        isOwner: Boolean(req.auth?.sub && String(recommendation.ownerId?._id) === String(req.auth.sub)),
+      }));
+      return res.json({ items, page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) });
+    } catch (error) {
+      console.error("[recommendations] Chargement du fil impossible", error);
+      return next(error);
+    }
+  });
+
+  /** Crée une recommandation et enregistre son image facultative. */
+  app.post("/api/recommendations", auth, recommendationImageUpload.single("image"), async (req, res, next) => {
+    try {
+      const fields = recommendationFields(req.body);
+      if (fields.error) {
+        await removeRecommendationImage(req.file?.filename);
+        return res.status(400).json({ message: fields.error });
+      }
+      const recommendation = await Recommendation.create({
+        ...fields.value,
+        ownerId: req.auth.sub,
+        imageFilename: req.file?.filename,
+        imageMimeType: req.file ? recommendationImageMimeType(req.file) : undefined,
+      });
+      await recommendation.populate({ path: "ownerId", select: "username name avatarId" });
+      return res.status(201).json({ ...recommendation.toPublic(), isOwner: true });
+    } catch (error) {
+      await removeRecommendationImage(req.file?.filename);
+      console.error("[recommendations] Création impossible", error);
+      return next(error);
+    }
+  });
+
+  /** Remplace le contenu d’une recommandation appartenant à l’utilisateur. */
+  app.put("/api/recommendations/:id", auth, recommendationImageUpload.single("image"), async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        await removeRecommendationImage(req.file?.filename);
+        return res.status(404).json({ message: "Recommandation introuvable" });
+      }
+      const fields = recommendationFields(req.body);
+      if (fields.error) {
+        await removeRecommendationImage(req.file?.filename);
+        return res.status(400).json({ message: fields.error });
+      }
+
+      const recommendation = await Recommendation.findOne({ _id: req.params.id, ownerId: req.auth.sub })
+        .select("+imageFilename +imageMimeType");
+      if (!recommendation) {
+        await removeRecommendationImage(req.file?.filename);
+        return res.status(404).json({ message: "Recommandation introuvable" });
+      }
+
+      const oldImage = recommendation.imageFilename;
+      Object.assign(recommendation, fields.value);
+      if (req.file) {
+        recommendation.imageFilename = req.file.filename;
+        recommendation.imageMimeType = recommendationImageMimeType(req.file);
+      } else if (req.body?.removeImage === "true") {
+        recommendation.imageFilename = undefined;
+        recommendation.imageMimeType = undefined;
+      }
+      await recommendation.save();
+      await recommendation.populate({ path: "ownerId", select: "username name avatarId" });
+      if (oldImage && oldImage !== recommendation.imageFilename) await removeRecommendationImage(oldImage);
+      return res.json({ ...recommendation.toPublic(), isOwner: true });
+    } catch (error) {
+      await removeRecommendationImage(req.file?.filename);
+      console.error("[recommendations] Modification impossible", error);
+      return next(error);
+    }
+  });
+
+  /** Supprime uniquement une recommandation de l’utilisateur connecté. */
+  app.delete("/api/recommendations/:id", auth, async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(404).json({ message: "Recommandation introuvable" });
+      }
+      const recommendation = await Recommendation.findOneAndDelete({
+        _id: req.params.id,
+        ownerId: req.auth.sub,
+      }).select("+imageFilename");
+      if (!recommendation) {
+        return res.status(404).json({ message: "Recommandation introuvable" });
+      }
+      await removeRecommendationImage(recommendation.imageFilename);
+      return res.status(204).end();
+    } catch (error) {
+      console.error("[recommendations] Suppression impossible", error);
+      return next(error);
+    }
+  });
+
+  /** Sert une image seulement si l’appelant peut consulter la recommandation. */
+  app.get("/api/recommendations/:id/image", optionalAuth, async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(404).json({ message: "Image introuvable" });
+      }
+      const recommendation = await Recommendation.findById(req.params.id)
+        .select("+imageFilename +imageMimeType ownerId");
+      if (!recommendation?.imageFilename) {
+        return res.status(404).json({ message: "Image introuvable" });
+      }
+      const owner = await User.findById(recommendation.ownerId).select("visibility");
+      if (!owner || (owner.visibility === "private" && String(owner.id) !== String(req.auth.sub))) {
+        return res.status(404).json({ message: "Image introuvable" });
+      }
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.type(recommendation.imageMimeType);
+      return res.sendFile(path.join(RECOMMENDATION_IMAGES, recommendation.imageFilename), (error) => {
+        if (error) {
+          console.error("[recommendations] Envoi de l’image impossible", error);
+          if (!res.headersSent) res.status(404).json({ message: "Image introuvable" });
+        }
+      });
+    } catch (error) {
+      console.error("[recommendations] Lecture de l’image impossible", error);
+      return next(error);
     }
   });
 
@@ -460,7 +747,8 @@ export function createApp() {
     }
     if (
       error instanceof multer.MulterError ||
-      error?.message === "Format audio non accepté"
+      error?.message === "Format audio non accepté" ||
+      error?.message === "Format d’image non accepté (JPG, PNG, WebP, GIF ou AVIF)"
     ) {
       return res.status(400).json({ message: error.message });
     }

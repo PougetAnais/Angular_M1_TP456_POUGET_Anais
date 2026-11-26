@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { tap } from 'rxjs';
 import { AuthResponse } from '../models/auth-response.model';
 import { AvatarId, User } from '../models/user.model';
+import { UserProfile } from '../models/user-profile.model';
 
 /** Handles authentication and the current user's profile. */
 @Injectable({ providedIn: 'root' })
@@ -35,6 +36,10 @@ export class AuthService {
     return this.http
       .get<User>('/api/users/me')
       .pipe(tap((user) => this.currentUser.set(user)));
+  }
+
+  userProfile(id: string) {
+    return this.http.get<UserProfile>(`/api/users/${id}`);
   }
 
   update(username: string, visibility: 'public' | 'private', avatarId: AvatarId) {

@@ -1,12 +1,13 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../shared/utils/api-error-message';
 import { AuthService } from '../../shared/services/auth.service';
 import { AvatarId } from '../../shared/models/user.model';
 import { AVATAR_DEFAULT, avatarChoices, avatarPresetUrl } from '../../shared/avatar-presets';
 
 @Component({
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './profile-page.html',
   styleUrl: './profile-page.css',
 })

@@ -1,12 +1,51 @@
-<section class="card recommendations-home">
-  <p class="eyebrow">ESPACE PERSONNEL</p>
-  <h1>Mes recommandations</h1>
-  @if (currentUser(); as user) {
-    <p>Bienvenue <strong>{{ '@' + user.username }}</strong>.</p>
-  }
-  <div class="empty-state" role="status">
-    <span aria-hidden="true">✦</span>
-    <h2>Votre collection commence ici</h2>
-    <p>Vos recommandations d’anime apparaîtront sur cette page.</p>
+<section class="feed-page">
+  <div class="feed-heading">
+    <div><p class="eyebrow">ANIME CLUB</p><h1>Fil d’actualité</h1><p>Les derniers avis partagés par la communauté.</p></div>
+    <span class="feed-count">{{ total() }} avis</span>
   </div>
+
+  @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }
+
+  <form class="feed-search" (submit)="searchFeed(); $event.preventDefault()" role="search">
+    <label class="visually-hidden" for="feed-anime-search">Nom de l’anime ou du manga</label>
+    <input id="feed-anime-search" [formControl]="animeSearch" maxlength="100" placeholder="Rechercher un anime ou manga" />
+    <label class="visually-hidden" for="feed-author-search">Pseudo de l’auteur</label>
+    <input id="feed-author-search" [formControl]="authorSearch" maxlength="24" placeholder="Rechercher un pseudo" />
+    <button type="submit" [disabled]="loading()">Rechercher</button>
+  </form>
+
+  <section class="social-feed" aria-label="Avis récents">
+    @if (loading()) { <p class="status" role="status">Actualisation du fil…</p> }
+    @for (recommendation of recommendations(); track recommendation.id) {
+      <article class="social-post">
+        <a class="post-author" [routerLink]="['/users', recommendation.author.id]">
+          <svg class="author-avatar" viewBox="0 0 100 100" aria-hidden="true"><use [attr.href]="avatarHref(recommendation.author.avatarId)"></use></svg>
+          <span><strong>{{ '@' + recommendation.author.username }}</strong><small>{{ recommendation.createdAt.slice(0, 10) }}</small></span>
+          <span class="profile-link-hint">Voir le profil</span>
+        </a>
+
+        <details class="post-review">
+          <summary>
+            @if (imageFor(recommendation); as cover) { <img class="post-thumbnail" [src]="cover" [alt]="'Couverture de ' + recommendation.animeTitle" /> }
+            <span class="post-title">{{ recommendation.animeTitle }}</span>
+            <span class="post-rating">{{ recommendation.rating }}/10</span>
+            <span class="expand-label">Ouvrir l’avis</span>
+          </summary>
+          <div class="post-expanded">
+            @if (recommendation.seasonOrVolume) { <p class="post-season">{{ recommendation.seasonOrVolume }}</p> }
+            @if (recommendation.comment) { <p class="post-comment">{{ recommendation.comment }}</p> } @else { <p class="muted">Aucun commentaire.</p> }
+            @if (imageFor(recommendation); as cover) { <img class="post-cover" [src]="cover" [alt]="'Illustration de ' + recommendation.animeTitle" /> }
+          </div>
+        </details>
+      </article>
+    } @empty {
+      @if (!loading()) { <p class="empty-state" role="status">Aucun avis ne correspond à cette recherche.</p> }
+    }
+
+    <nav class="pagination" aria-label="Pages du fil d’actualité">
+      <button type="button" class="secondary" (click)="changePage(page() - 1)" [disabled]="page() <= 1 || loading()">Précédent</button>
+      <span>Page {{ page() }} / {{ pages() }}</span>
+      <button type="button" class="secondary" (click)="changePage(page() + 1)" [disabled]="page() >= pages() || loading()">Suivant</button>
+    </nav>
+  </section>
 </section>

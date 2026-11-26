@@ -2,59 +2,47 @@
 
 ## Étape 1 — Définition du sujet
 
-Le projet vise à créer une application de partage de recommandations d’anime. Une recommandation comprend un titre, une note sur 10, un commentaire facultatif et une image facultative. Les profils peuvent être publics ou privés. La recherche d’utilisateurs et les demandes d’amitié sont prévues. Un chat avec partage de recommandations est envisagé dans un second temps.
+Le projet est une application de partage de recommandations d’anime et de manga. Un avis comprend un nom, une note sur 10, un commentaire facultatif, une image facultative et éventuellement une saison ou un tome. Les utilisateurs peuvent avoir un profil public ou privé. La recherche d’utilisateurs, les demandes d’amitié et le chat sont prévus dans le cahier des charges ; le chat est envisagé pour une version ultérieure.
 
-Le cahier des charges est disponible dans `CAHIER_DES_CHARGES.md`.
+Le cahier des charges initial est disponible dans `CAHIER_DES_CHARGES.md`.
 
-## Étape 2 — Architecture et analyse du prototype
+## Étape 2 — Architecture et nettoyage du prototype
 
-### Travail effectué
-
-- Examen des dossiers `frontend-starter/`, `backend/` et `DOC/`, notamment des routes Angular, des services d’authentification, des modèles Mongoose, du contrat HTTP et des consignes de développement.
-- Rédaction de l’architecture cible dans `DOC/ARCHITECTURE.md` : organisation frontend/backend, choix techniques, entités, règles d’accès, routes candidates et ordre de réalisation.
-- Identification des briques à réutiliser : Angular 22, Express, MongoDB/Mongoose, JWT, bcrypt, profil utilisateur, proxy API et Multer pour les fichiers audio.
-- Identification des éléments audio spécifiques à retirer ou remplacer lors de la migration vers les recommandations.
-
-### État de l’implémentation
-
-Le prototype contient l’inscription, la connexion, la consultation et la modification du profil, ainsi que les opérations de dépôt et de suppression de pistes audio pour un utilisateur connecté. Ces opérations audio ne constituent pas encore des recommandations d’anime et n’acceptent pas encore les images prévues par le projet.
-
-Les profils publics/privés, les recommandations d’anime, la recherche d’utilisateurs, les demandes d’amitié et le chat restent à implémenter.
-
-### Nettoyage
-
-Les deux fichiers audio d’exemple `song1.mp3` et `song2.mp3` ont été supprimés. La lecture audio a aussi été retirée : lecteur et bouton de lecture Angular, service HTTP associé et route API `GET /tracks/:id/audio`. Le contrat HTTP a été actualisé. Le dépôt et la suppression de fichiers audio restent dans le prototype. Le dossier `backend/data/uploads/` n’a pas été touché, car il peut contenir des données locales.
-
-## Choix techniques actuels
-
-- Frontend : Angular 22 standalone avec services HTTP, modèles TypeScript, routes protégées, formulaires réactifs et Signals.
-- Backend : Node.js et Express 5.
-- Persistance : MongoDB via Mongoose.
-- Authentification : JWT et mots de passe hachés avec bcrypt.
-- Icônes de profil : un sprite SVG statique de 20 icônes ; seule la valeur `avatarId` est conservée dans le compte. Les fichiers uploadés restent réservés aux pistes audio du prototype.
+- Le prototype Angular 22, Express 5, MongoDB/Mongoose et JWT a été conservé comme base.
+- Les fichiers audio d’exemple et la lecture audio (lecteur, code frontend et route de lecture) ont été retirés. Le dépôt et la suppression des pistes audio restent dans le prototype.
+- L’ancien système de photo de profil téléversée a été remplacé par 20 icônes SVG rondes. Aucune photo de profil personnelle n’est téléversée ; l’icône est enregistrée sous forme d’identifiant.
+- Les choix et routes API courants sont décrits dans `DOC/ARCHITECTURE.md` et `DOC/API_CONTRACT.md`.
 
 ## Étape 3 — Comptes et profils
 
-### Fonctionnalités ajoutées
+- Inscription avec pseudo unique, e-mail, type de compte public/privé, mot de passe et confirmation.
+- Choix d’une icône à l’inscription et modification depuis le profil : six profils humains en trois teintes de peau, sept fruits et sept animaux. Le chat est le choix par défaut.
+- Modification du pseudo, de la visibilité et de l’icône ; le menu en haut à droite reflète l’icône enregistrée.
+- La page de recommandations est accessible après inscription ou connexion.
 
-- Inscription avec pseudo unique, adresse e-mail, type de compte public/privé, mot de passe et confirmation vérifiée côté interface et API.
-- Choix d’une icône de profil lors de l’inscription : six profils humains avec trois teintes de peau, sept fruits et sept animaux. Le chat (`animal-cat`) est sélectionné par défaut.
-- Modification du pseudo, de la visibilité et de l’icône sur la page Profil. La sélection est enregistrée avec le compte.
-- Le menu en haut à droite affiche l’icône du compte et donne accès à la modification du profil et à la déconnexion.
-- Le système de photo téléversée a été supprimé : plus de formulaire de fichier, de stockage de photo ou de routes API d’avatar. Les uploads audio restent inchangés.
-- Après inscription ou connexion, redirection vers la page personnelle « Mes recommandations ». Cette page reste un écran d’accueil vide en attendant l’ajout des recommandations.
+## Étape 4 — Recommandations
 
-Les anciens comptes sans champ `username` restent lisibles : leur ancien nom est utilisé comme pseudo de compatibilité. Les comptes sans `avatarId` utilisent le chat par défaut.
+- Création d’un avis avec nom d’anime/manga, note de 0 à 10, commentaire facultatif, saison ou tome facultatif et image de couverture facultative.
+- Modification et suppression d’une recommandation par son auteur.
+- Fil général trié du plus récent au plus ancien, avec profil/icône de l’auteur et contenu de son avis.
+- Barre de recherche par nom d’anime/manga, sans distinction de casse, et pagination.
+- Les visiteurs peuvent lire et rechercher les recommandations publiques. Un compte privé ne voit ses recommandations que lui-même tant que les relations d’amitié ne sont pas implémentées.
+- Les images acceptent JPG/JPEG, PNG, WebP, GIF et AVIF, jusqu’à 5 Mo. Elles sont stockées sur le serveur sous un nom généré ; le navigateur les récupère par une route API qui applique les règles de visibilité.
+- Le contrat API a été mis à jour dans `DOC/API_CONTRACT.md`.
 
-La visibilité est enregistrée et modifiable, mais elle ne filtre pas encore de contenu partagé. Les profils consultables par d’autres utilisateurs, recommandations et relations d’amitié ne sont pas encore implémentés.
+### Séparation des pages
 
-### Vérification
+- La page **Fil d’actualité** affiche les derniers avis sous forme de cartes sociales compactes, avec lien vers le profil de l’auteur. Chaque avis se déroule pour montrer son commentaire, son image et les détails de saison/tome. La recherche accepte un titre et un pseudo.
+- La page **Profil** place les avis à gauche et les informations du compte à droite. Sur son propre profil, l’utilisateur peut aussi créer, modifier et supprimer ses avis depuis cette page. Les réglages du compte restent sur une page distincte.
 
-Les tests Angular et backend ont été adaptés au choix et à l’enregistrement de l’icône. Ils n’ont pas été exécutés après cette mise à jour.
+## Tests et vérifications
+
+La consigne du cours demande des tests unitaires pour les nouvelles fonctionnalités. Des tests ont été ajoutés pour le modèle de recommandation, la validation de note, la protection des routes et les appels Angular de liste, création, modification, suppression et lecture des images.
+
+Résultats : suite backend réussie (7 tests), suite Angular réussie (10 tests) et build Angular réussi.
 
 ## Suite du travail
 
-1. Implémenter les recommandations et leurs images.
-2. Implémenter la recherche et les demandes d’amitié, en appliquant les règles d’accès des profils privés.
-3. Ajouter le chat si cette fonctionnalité reste prioritaire.
-4. Mettre à jour `DOC/API_CONTRACT.md` et les tests à chaque évolution de l’API.
+1. Ajouter la recherche d’utilisateurs et les demandes d’amitié.
+2. Appliquer les droits d’accès des amis aux profils privés et aux recommandations partagées.
+3. Développer le chat et le partage d’avis si cette fonctionnalité reste dans le périmètre final.

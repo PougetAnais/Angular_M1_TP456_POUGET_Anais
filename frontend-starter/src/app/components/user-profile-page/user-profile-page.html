@@ -1,0 +1,99 @@
+<section class="user-profile-page">
+  @if (loading()) { <p class="status" role="status">Chargement du profil…</p> }
+  @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }
+  @if (success()) { <p class="notice success" role="status">{{ success() }}</p> }
+
+  @if (profile(); as user) {
+    <div class="profile-layout">
+      <section class="profile-reviews" aria-label="Avis du profil">
+        <div class="reviews-heading">
+          <div><p class="eyebrow">PROFIL</p><h1>Les avis de {{ '@' + user.username }}</h1></div>
+          <span>{{ total() }} avis</span>
+        </div>
+
+        @if (loadingReviews()) { <p class="status" role="status">Chargement des avis…</p> }
+        @for (recommendation of recommendations(); track recommendation.id) {
+          <article class="profile-review-card">
+            <details class="review-details">
+              <summary>
+                @if (imageFor(recommendation); as cover) { <img class="review-thumb" [src]="cover" [alt]="'Couverture de ' + recommendation.animeTitle" /> }
+                <span class="review-title">{{ recommendation.animeTitle }}@if (recommendation.seasonOrVolume) { <small> · {{ recommendation.seasonOrVolume }}</small> }</span>
+                <span class="review-rating">{{ recommendation.rating }}/10</span>
+                <span class="expand-hint">Détails</span>
+              </summary>
+              <div class="review-expanded">
+                @if (recommendation.comment) { <p>{{ recommendation.comment }}</p> } @else { <p class="muted">Aucun commentaire.</p> }
+                @if (recommendation.seasonOrVolume) { <p><strong>Saison ou tome :</strong> {{ recommendation.seasonOrVolume }}</p> }
+                @if (imageFor(recommendation); as cover) { <img class="review-full-image" [src]="cover" [alt]="'Illustration de ' + recommendation.animeTitle" /> }
+                <small>Publié le {{ recommendation.createdAt.slice(0, 10) }}</small>
+              </div>
+            </details>
+            @if (recommendation.isOwner) {
+              <div class="review-actions">
+                <button type="button" class="secondary" (click)="edit(recommendation)">Modifier</button>
+                <button type="button" class="danger" (click)="delete(recommendation)">Supprimer</button>
+              </div>
+            }
+          </article>
+        } @empty {
+          @if (!loadingReviews()) { <p class="empty-state">Ce profil n’a pas encore publié d’avis.</p> }
+        }
+
+        <nav class="pagination" aria-label="Pages des avis du profil">
+          <button type="button" class="secondary" (click)="loadRecommendations(page() - 1)" [disabled]="page() <= 1 || loadingReviews()">Précédent</button>
+          <span>Page {{ page() }} / {{ pages() }}</span>
+          <button type="button" class="secondary" (click)="loadRecommendations(page() + 1)" [disabled]="page() >= pages() || loadingReviews()">Suivant</button>
+        </nav>
+      </section>
+
+      <aside class="profile-sidebar">
+        <section class="user-card">
+          <svg class="profile-avatar" viewBox="0 0 100 100" role="img" [attr.aria-label]="'Avatar de ' + user.username"><use [attr.href]="avatarPresetUrl(user.avatarId)"></use></svg>
+          <h2>{{ '@' + user.username }}</h2>
+          <dl>
+            @if (user.email) { <div><dt>E-mail</dt><dd>{{ user.email }}</dd></div> }
+            <div><dt>Type de compte</dt><dd>{{ user.visibility === 'public' ? 'Public' : 'Privé' }}</dd></div>
+            <div><dt>Membre depuis</dt><dd>{{ user.createdAt.slice(0, 10) }}</dd></div>
+          </dl>
+          @if (user.isOwner) { <a class="settings-link" routerLink="/profile/settings">Modifier mon profil</a> }
+        </section>
+
+        @if (user.isOwner) {
+          <section class="recommendation-editor">
+            <h2>{{ editingId() ? 'Modifier mon avis' : 'Ajouter un avis' }}</h2>
+            <form [formGroup]="form" (ngSubmit)="submit()">
+              <label for="profile-anime-title">Anime ou manga</label>
+              <input id="profile-anime-title" formControlName="animeTitle" maxlength="120" placeholder="Nom du titre" />
+              @if (form.controls.animeTitle.touched && form.controls.animeTitle.invalid) { <small class="field-error">Saisissez un nom (120 caractères maximum).</small> }
+
+              <label for="profile-anime-rating">Note sur 10</label>
+              <input id="profile-anime-rating" type="number" min="0" max="10" step="0.5" formControlName="rating" />
+              @if (form.controls.rating.touched && form.controls.rating.invalid) { <small class="field-error">La note doit être comprise entre 0 et 10.</small> }
+
+              <label for="profile-anime-comment">Mon avis (facultatif)</label>
+              <textarea id="profile-anime-comment" rows="4" maxlength="2000" formControlName="comment"></textarea>
+
+              <label for="profile-anime-season">Saison ou tome (facultatif)</label>
+              <input id="profile-anime-season" formControlName="seasonOrVolume" maxlength="100" />
+
+              <label for="profile-recommendation-image">Image (facultative, 5 Mo maximum)</label>
+              <input #profileImageInput id="profile-recommendation-image" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif" (change)="chooseImage($event)" [disabled]="saving()" />
+              @if (imagePreview(); as preview) {
+                <div class="image-preview"><img [src]="preview" alt="Aperçu de l’image choisie" /><button type="button" class="secondary" (click)="clearImage(profileImageInput)">Retirer l’image</button></div>
+              }
+              @if (editingRecommendation(); as edited) {
+                @if (!imagePreview() && edited.imageUrl && imageFor(edited); as currentImage) { <div class="image-preview"><img [src]="currentImage" alt="Image actuelle de l’avis" /></div> }
+                @if (!imagePreview() && edited.imageUrl) { <label class="remove-image"><input type="checkbox" [checked]="removeExistingImage()" (change)="toggleRemoveImage($event)" /> Retirer l’image actuelle</label> }
+              }
+
+              <div class="editor-actions">
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Enregistrement…' : (editingId() ? 'Enregistrer les modifications' : 'Publier mon avis') }}</button>
+                @if (editingId()) { <button type="button" class="secondary" (click)="cancelEdit()" [disabled]="saving()">Annuler</button> }
+              </div>
+            </form>
+          </section>
+        }
+      </aside>
+    </div>
+  }
+</section>

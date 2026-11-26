@@ -32,6 +32,11 @@ export class AppComponent implements OnInit {
 
   editProfile(): void {
     this.menuOpen.set(false);
+    void this.router.navigateByUrl('/profile/settings');
+  }
+
+  viewProfile(): void {
+    this.menuOpen.set(false);
     void this.router.navigateByUrl('/profile');
   }
 

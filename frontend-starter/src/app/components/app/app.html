@@ -71,8 +71,9 @@
     <b>Recommandation Anime</b>
   </a>
   <nav aria-label="Navigation principale">
+    <a routerLink="/recommendations">Fil d’actualité</a>
     @if (auth.token()) {
-      <a routerLink="/recommendations">Mes recommandations</a>
+      <a routerLink="/profile">Mon profil</a>
       <div class="account-menu">
         <button
           class="account-menu-trigger"
@@ -85,7 +86,8 @@
         </button>
         @if (menuOpen()) {
           <div class="account-menu-panel">
-            <button type="button" (click)="editProfile()">Modifier le profil</button>
+            <button type="button" (click)="viewProfile()">Voir mon profil</button>
+            <button type="button" (click)="editProfile()">Modifier mes informations</button>
             <button type="button" (click)="logout()">Déconnexion</button>
           </div>
         }

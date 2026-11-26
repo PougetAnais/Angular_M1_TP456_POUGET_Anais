@@ -1,5 +1,6 @@
 <section class="card">
-  <h1>Mon profil</h1>
+  <a class="back-to-profile" routerLink="/profile">Retour à mon profil</a>
+  <h1>Modifier mon profil</h1>
   @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
   @if (success()) { <p role="status">{{ success() }}</p> }
   @if (currentUser(); as user) {

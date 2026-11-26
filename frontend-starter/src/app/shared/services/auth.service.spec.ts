@@ -47,4 +47,14 @@ describe('AuthService', () => {
     request.flush(updated);
     expect(service.currentUser()?.avatarId).toBe('fruit-orange');
   });
+
+  it('userProfile() requests a public user profile by id', () => {
+    service.userProfile('user-2').subscribe((profile) => {
+      expect(profile.username).toBe('anais');
+      expect(profile.isOwner).toBe(false);
+    });
+    const request = httpMock.expectOne('/api/users/user-2');
+    expect(request.request.method).toBe('GET');
+    request.flush({ id: 'user-2', username: 'anais', visibility: 'public', avatarId: 'animal-cat', createdAt: '2026-01-01', isOwner: false });
+  });
 });
